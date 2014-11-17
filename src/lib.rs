@@ -14,17 +14,25 @@ use std::{raw, mem, io};
 use std::intrinsics::TypeId;
 
 
+/// Holds error location information.
 #[deriving(Clone, PartialEq, Eq)]
 pub struct ErrorLocation {
+    /// the file that caused the error.
     pub file: Path,
+    /// the line that caused the error
     pub line: uint,
+    /// the column that caused the error.
     pub col: uint,
 }
 
 impl ErrorLocation {
 
     /// Returns the source line for this error location if this is possible.
-    fn get_source_line(&self) -> io::IoResult<String> {
+    ///
+    /// This will load the source file from the file system and read the
+    /// appropriate line number.  This can be a slow operation which is
+    /// why this is only recommended for debug builds.
+    pub fn get_source_line(&self) -> io::IoResult<String> {
         let file = try!(io::File::open(&self.file));
         let mut reader = io::BufferedReader::new(file);
         match reader.lines().skip(self.line - 1).next() {
@@ -340,9 +348,10 @@ impl<W: Writer> ErrorFormatter<W> {
         }
     }
 
-    /// Formats the entire trace of an error.  This basically invokes the
-    /// `format_cause` function for the given error and all causes in
-    /// reverse order and adds a header.
+    /// Formats the entire trace of an error.
+    ///
+    /// This will find all error traces and format them out with
+    /// their causes.
     pub fn format_trace(&mut self, err: &Error) -> io::IoResult<()> {
         let mut traces = vec![];
         let mut ptr = err;
@@ -373,7 +382,7 @@ impl<W: Writer> ErrorFormatter<W> {
         Ok(())
     }
 
-    /// Formats a s single error frame.
+    /// Formats a single error frame.
     pub fn format_frame(&mut self, err: &Error) -> io::IoResult<()> {
         match err.location() {
             Some(loc) => {
@@ -392,6 +401,7 @@ impl<W: Writer> ErrorFormatter<W> {
         Ok(())
     }
 
+    /// Formats the error cause information (name, description and detail).
     pub fn format_cause(&mut self, err: &Error) -> io::IoResult<()> {
         try!(write!(self.writer, "{}: {}",
                     err.name(), err.description()));
@@ -411,6 +421,10 @@ pub fn print_error_stack(err: &Error) {
 }
 
 
+/// Returns the error location.
+///
+/// This always returns the current error location.  It's recommended to use
+/// `debug_error_location` instead.
 #[macro_export]
 macro_rules! error_location {
     () => ({
@@ -422,6 +436,10 @@ macro_rules! error_location {
     })
 }
 
+/// Returns the error location as option.
+///
+/// In debug builds this will return the error location, in release builds
+/// this returns `None`.
 #[macro_export]
 macro_rules! debug_error_location {
     () => ({
@@ -433,7 +451,40 @@ macro_rules! debug_error_location {
     })
 }
 
-/// Returns with an error.
+/// Returns early with an error.
+///
+/// This is implemented through the `ConstructError` trait.  The following
+/// common versions exist:
+///
+/// Fail with just an error data and default description:
+///
+/// ```rust,no_run
+/// fail!(MyError)
+/// ```
+///
+/// Fail with just an error data and default description and a cause:
+///
+/// ```rust,no_run
+/// fail!(MyError, original_error)
+/// ```
+///
+/// Fail with error data and custom description:
+///
+/// ```rust,no_run
+/// fail!(MyError, "my description")
+/// ```
+///
+/// Fail with error data and custom description and a cause:
+///
+/// ```rust,no_run
+/// fail!(MyError, "my description", original_error)
+/// ```
+///
+/// Propagate another error:
+///
+/// ```rust,no_run
+/// fail!(original_error)
+/// ```
 #[macro_export]
 macro_rules! fail {
     ($($expr:expr),*) => ({
