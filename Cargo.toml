@@ -1,0 +1,9 @@
+[package]
+name = "rust-eh"
+version = "0.0.1"
+authors = ["Armin Ronacher <armin.ronacher@active-4.com>"]
+
+[lib]
+name = "eh"
+path = "src/lib.rs"
+plugin = true
