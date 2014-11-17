@@ -104,19 +104,19 @@ impl<'a> ErrorDataExt<'a> for &'a ErrorData {
 pub enum Error {
     ActualError {
         /// The error data of this error.
-        data: Box<ErrorData>,
+        pub data: Box<ErrorData>,
         /// The static description of the error.
-        description: &'static str,
+        pub description: &'static str,
         /// Optionally the location of where the error came from.
-        location: Option<Box<ErrorLocation>>,
+        pub location: Option<Box<ErrorLocation>>,
         /// Optionally the original error that caused this one.
-        cause: Option<Box<Error>>,
+        pub cause: Option<Box<Error>>,
     },
     PropagatedError {
         /// The parent error.
-        parent: Box<Error>,
+        pub parent: Box<Error>,
         /// The location of where the propagation happened.
-        location: Option<Box<ErrorLocation>>,
+        pub location: Option<Box<ErrorLocation>>,
     },
 }
 
