@@ -8,7 +8,6 @@
 #![feature(macro_rules)]
 #![feature(associated_types)]
 #![feature(while_let)]
-#![feature(struct_variant)]
 
 use std::{raw, mem, io};
 use std::intrinsics::TypeId;
@@ -97,26 +96,26 @@ impl<'a> ErrorDataExt<'a> for &'a ErrorData {
     }
 }
 
-/// Represents an error.  For most intents and purposes only the `ActualError`
-/// is used.  The `PropagatedError` is used in debug builds to augment the
+/// Represents an error.  For most intents and purposes only the `Error::Actual`
+/// is used.  The `Error::Propagated` is used in debug builds to augment the
 /// error information by recording all the stacks the error gets propagated
 /// through.
 pub enum Error {
-    ActualError {
+    Actual {
         /// The error data of this error.
-        pub data: Box<ErrorData>,
+        data: Box<ErrorData>,
         /// The static description of the error.
-        pub description: &'static str,
+        description: &'static str,
         /// Optionally the location of where the error came from.
-        pub location: Option<Box<ErrorLocation>>,
+        location: Option<Box<ErrorLocation>>,
         /// Optionally the original error that caused this one.
-        pub cause: Option<Box<Error>>,
+        cause: Option<Box<Error>>,
     },
-    PropagatedError {
+    Propagated {
         /// The parent error.
-        pub parent: Box<Error>,
+        parent: Box<Error>,
         /// The location of where the propagation happened.
-        pub location: Option<Box<ErrorLocation>>,
+        location: Option<Box<ErrorLocation>>,
     },
 }
 
@@ -125,10 +124,10 @@ impl Error {
     /// data.
     pub fn name(&self) -> &str {
         match *self {
-            ActualError { ref data, .. } => {
+            Error::Actual { ref data, .. } => {
                 data.name()
             },
-            PropagatedError { ref parent, .. } => {
+            Error::Propagated { ref parent, .. } => {
                 parent.name()
             }
         }
@@ -137,10 +136,10 @@ impl Error {
     /// The static description of the error.
     pub fn description(&self) -> &str {
         match *self {
-            ActualError { description, .. } => {
+            Error::Actual { description, .. } => {
                 description
             },
-            PropagatedError { ref parent, .. } => {
+            Error::Propagated { ref parent, .. } => {
                 parent.description()
             }
         }
@@ -149,10 +148,10 @@ impl Error {
     /// The detail of the error.
     pub fn detail(&self) -> Option<String> {
         match *self {
-            ActualError { ref data, .. } => {
+            Error::Actual { ref data, .. } => {
                 data.detail()
             },
-            PropagatedError { ref parent, .. } => {
+            Error::Propagated { ref parent, .. } => {
                 parent.detail()
             }
         }
@@ -161,13 +160,13 @@ impl Error {
     /// The location of where the error last happened.
     pub fn location(&self) -> Option<&ErrorLocation> {
         match *self {
-            ActualError { ref location, .. } => {
+            Error::Actual { ref location, .. } => {
                 match *location {
                     Some(ref loc) => Some(&**loc),
                     None => None,
                 }
             },
-            PropagatedError { ref location, ref parent, .. } => {
+            Error::Propagated { ref location, ref parent, .. } => {
                 match *location {
                     Some(ref loc) => Some(&**loc),
                     None => parent.location(),
@@ -179,13 +178,13 @@ impl Error {
     /// Checks if the error is of a specific error data type.
     pub fn is<E: ErrorData>(&self) -> bool {
         match *self {
-            ActualError { ref data, ref cause, .. } => {
+            Error::Actual { ref data, ref cause, .. } => {
                 data.is() || match *cause {
                     Some(ref x) => x.is(),
                     None => false,
                 }
             },
-            PropagatedError { ref parent, ..} => {
+            Error::Propagated { ref parent, ..} => {
                 parent.is()
             }
         }
@@ -194,7 +193,7 @@ impl Error {
     /// Returns the error data.  Requires that the type is known.
     pub fn get_data<E: ErrorData>(&self) -> Option<&E> {
         match *self {
-            ActualError { ref data, ref cause, .. } => {
+            Error::Actual { ref data, ref cause, .. } => {
                 match data.cast() {
                     Some(x) => Some(x),
                     None => {
@@ -205,7 +204,7 @@ impl Error {
                     }
                 }
             },
-            PropagatedError { ref parent, ..} => {
+            Error::Propagated { ref parent, ..} => {
                 parent.get_data()
             }
         }
@@ -214,13 +213,13 @@ impl Error {
     /// Returns the error that caused this one.
     pub fn cause(&self) -> Option<&Error> {
         match *self {
-            ActualError { ref cause, .. } => {
+            Error::Actual { ref cause, .. } => {
                 match *cause {
                     Some(ref cause) => Some(&**cause),
                     None => None,
                 }
             },
-            PropagatedError { ref parent, .. } => parent.cause(),
+            Error::Propagated { ref parent, .. } => parent.cause(),
         }
     }
 
@@ -237,11 +236,11 @@ impl Error {
         loop {
             causes.push(ptr);
             match *ptr {
-                ActualError { .. } => {
+                Error::Actual { .. } => {
                     root = &*ptr;
                     break;
                 },
-                PropagatedError { ref parent, .. } => {
+                Error::Propagated { ref parent, .. } => {
                     ptr = &**parent;
                 }
             }
@@ -265,7 +264,7 @@ impl ConstructError<(Error,)> for Error {
         if !cfg!(ndebug) {
             match loc {
                 Some(loc) => {
-                    return PropagatedError {
+                    return Error::Propagated {
                         parent: box err,
                         location: Some(box loc),
                     };
@@ -302,7 +301,7 @@ impl<S: ErrorData> ConstructError<(S, Error)> for Error {
 impl<S: ErrorData> ConstructError<(S, &'static str)> for Error {
     #[inline(always)]
     fn construct_error((data, desc): (S, &'static str), loc: Option<ErrorLocation>) -> Error {
-        ActualError {
+        Error::Actual {
             data: box data,
             description: desc,
             location: match loc {
@@ -318,7 +317,7 @@ impl<S: ErrorData> ConstructError<(S, &'static str, Error)> for Error {
     #[inline(always)]
     fn construct_error((data, desc, cause): (S, &'static str, Error),
                        loc: Option<ErrorLocation>) -> Error {
-        ActualError {
+        Error::Actual {
             data: box data,
             description: desc,
             location: match loc {
